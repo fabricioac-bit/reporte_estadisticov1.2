@@ -1,8 +1,8 @@
-# Sistema de Estadística Hospitalaria
+# Sistema de reportes estadísticos hospital regional
 
 Este repositorio contiene el código fuente de la aplicación web monolítica diseñada para la gestión, procesamiento y visualización de indicadores clave de rendimiento (KPI) y reportes estadísticos de productividad del personal en el entorno hospitalario.
 
-## Arquitectura y Tecnologías
+## Arquitectura y tecnologías
 
 El sistema está construido bajo un enfoque monolítico utilizando el framework Next.js, garantizando modularidad y separación de responsabilidades en el manejo de datos e interfaz de usuario.
 
@@ -11,7 +11,7 @@ El sistema está construido bajo un enfoque monolítico utilizando el framework 
 * **Capa de Acceso a Datos:** Conexión nativa a Microsoft SQL Server utilizando la librería `mssql` con soporte para Connection Pooling.
 * **Seguridad:** Autenticación basada en sesiones, hashing de credenciales mediante `bcryptjs` y protección de rutas a través de Middleware de Next.js.
 
-## Estructura del Proyecto
+## Estructura del proyecto
 
 El directorio `src/` organiza el flujo de la información de la siguiente manera:
 
