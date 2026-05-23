@@ -1,0 +1,25 @@
+name: Validacion de Sintaxis
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  check-sintaxis:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Descargar codigo
+      uses: actions/checkout@v4
+
+    - name: Configurar Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 18
+        cache: 'npm'
+
+    - name: Instalar dependencias
+      run: npm ci
+
+    - name: Validar compilacion (Pipeline)
+      run: npm run build
