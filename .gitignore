@@ -1,0 +1,22 @@
+# Variables de entorno (seguridad)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# Dependencias
+node_modules/
+/npm-debug.log*
+
+# Carpetas de compilación y caché de Next.js
+.next/
+out/
+build/
+.turbo/
+
+# Archivos temporales del sistema operativo o editores
+.DS_Store
+.vscode/
+Thumbs.db
