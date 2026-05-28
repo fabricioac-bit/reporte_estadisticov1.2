@@ -95,7 +95,7 @@ export default function LoginPage() {
           </div>
 
           <h1 className="text-4xl font-extrabold tracking-tight mb-4 text-white font-sans drop-shadow-sm">
-            Rezola Hospitalario
+            Rezola CAÑETE
           </h1>
 
           <p className="text-slate-100/95 leading-relaxed text-base mb-10 font-sans font-light">
