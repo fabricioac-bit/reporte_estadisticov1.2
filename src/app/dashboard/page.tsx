@@ -24,38 +24,33 @@ import {
   User,
   FileText,
   Signature,
-  FileBarChart2,
   ShieldCheck,
-  Building,
   Settings,
   RefreshCw,
-  FolderOpen,
   HeartPulse,
   Menu,
-  ChevronDown,
 } from 'lucide-react';
 
-interface KpiData {
-  id: string;
-  titulo: string;
-  valor: string | number;
-  cambio: string;
-  esPositivo: boolean;
-  icono: string;
-}
-
-interface ProductividadData {
-  mes: string;
-  consultas: number;
-  cirugias: number;
-  emergencias: number;
+// Estructura estricta basada en el contrato del DashboardService
+interface DashboardContract {
+  kpis: {
+    consultas_medicas: number;
+    consultas_tendencia: number;
+    cirugias_exitosas: number;
+    cirugias_tendencia: number;
+    atenciones_emergencia: number;
+    emergencia_tendencia: number;
+    ocupacion_camas: number;
+    camas_tendencia: number;
+  };
+  rendimiento_mensual: Array<{ mes: string; cantidad: number }>;
+  historial_quirurgico: Array<{ mes: string; cantidad: number }>;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
-  const [kpis, setKpis] = useState<KpiData[]>([]);
-  const [productividad, setProductividad] = useState<ProductividadData[]>([]);
+  const [data, setData] = useState<DashboardContract | null>(null);
   const [loading, setLoading] = useState(true);
   const [reconnecting, setReconnecting] = useState(false);
   const [usuario, setUsuario] = useState<{ nombre: string; usuario: string } | null>(null);
@@ -63,32 +58,31 @@ export default function DashboardPage() {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [profileMenuOpen, setProfileMenuOpen] = useState(false);
 
-  // Cargar datos del dashboard y sesión
+  // Consolidación de peticiones en un único flujo asíncrono
   const loadDashboardData = async (isRetry = false) => {
     if (isRetry) setReconnecting(true);
     try {
-      const [kpisRes, prodRes] = await Promise.all([
-        axios.get('/api/reportes'),
-        axios.get('/api/productividad'),
-      ]);
+      // Petición directa a la nueva API unificada de 3 capas
+      const dashboardRes = await axios.get('/api/dashboard');
+      setData(dashboardRes.data);
 
-      if (kpisRes.data.success) setKpis(kpisRes.data.data);
-      if (prodRes.data.success) setProductividad(prodRes.data.data);
-
+      // Carga paralela controlada de la sesión del usuario administrativo
       try {
         const userRes = await axios.get('/api/auth/me');
         if (userRes.data.success && userRes.data.usuario) {
           setUsuario(userRes.data.usuario);
         }
       } catch (err) {
-        console.warn('No se pudo cargar usuario actual:', err);
+        console.warn('Sesión de usuario no disponible en el servidor de autenticación.');
       }
 
       setLoading(false);
       setReconnecting(false);
-    } catch (err) {
-      console.error('Error al conectar con los servicios del Dashboard:', err);
-      // Simular reconexión resiliente si hay pérdida de datos o base de datos apagada
+    } catch (err: any) {
+      console.error('Fallo en la comunicación con la infraestructura del Dashboard:', err);
+      setReconnecting(true);
+      
+      // Reintentar de forma resiliente cada 5 segundos si el servidor SQL no responde
       setTimeout(() => {
         loadDashboardData(true);
       }, 5000);
@@ -125,7 +119,6 @@ export default function DashboardPage() {
             router.refresh();
           });
         } catch (e) {
-          // Fallback delete cookie manually client side just in case
           document.cookie = 'sigh_session=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT;';
           router.push('/login');
         }
@@ -144,7 +137,6 @@ export default function DashboardPage() {
       setExpandedGroups([menuKey]);
       return;
     }
-
     setExpandedGroups((prev) => {
       if (prev.includes(menuKey)) return prev.filter((k) => k !== menuKey);
       return [...prev, menuKey];
@@ -161,7 +153,6 @@ export default function DashboardPage() {
 
   const handleChangePassword = async () => {
     setProfileMenuOpen(false);
-
     const result = await Swal.fire({
       title: 'Cambiar clave',
       html: `
@@ -184,17 +175,14 @@ export default function DashboardPage() {
           Swal.showValidationMessage('Complete todos los campos.');
           return null;
         }
-
         if (newPassword.length < 6) {
           Swal.showValidationMessage('La nueva contraseña debe tener al menos 6 caracteres.');
           return null;
         }
-
         if (newPassword !== confirmPassword) {
           Swal.showValidationMessage('Las contraseñas no coinciden.');
           return null;
         }
-
         return { currentPassword, newPassword, confirmPassword };
       },
     });
@@ -207,7 +195,6 @@ export default function DashboardPage() {
         newPassword: result.value.newPassword,
         confirmPassword: result.value.confirmPassword,
       });
-
       Swal.fire({
         title: 'Clave cambiada',
         text: 'Su nueva contraseña se ha guardado correctamente.',
@@ -224,21 +211,6 @@ export default function DashboardPage() {
     }
   };
 
-  const getKpiIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'UserCheck':
-        return <UserCheck className="w-8 h-8 text-sky-500" />;
-      case 'Activity':
-        return <Activity className="w-8 h-8 text-blue-500" />;
-      case 'AlertTriangle':
-        return <AlertTriangle className="w-8 h-8 text-amber-500" />;
-      case 'Bed':
-        return <Bed className="w-8 h-8 text-teal-500" />;
-      default:
-        return <Activity className="w-8 h-8 text-blue-500" />;
-    }
-  };
-
   if (!mounted) return null;
 
   return (
@@ -246,8 +218,6 @@ export default function DashboardPage() {
       
       {/* SIDEBAR */}
       <aside className={`relative flex-shrink-0 h-screen sticky top-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-950 text-slate-200 flex flex-col transition-all duration-300 ease-in-out ${sidebarCollapsed ? 'w-20 md:w-20' : 'w-full md:w-72'}`}>
-        
-        {/* LOGO Y TOGGLE */}
         <div className="p-6 border-b border-slate-800/60 flex items-center justify-between gap-3">
           {!sidebarCollapsed ? (
             <>
@@ -255,7 +225,7 @@ export default function DashboardPage() {
                 <div className="w-10 h-10 rounded-xl bg-sky-500/20 flex items-center justify-center border border-sky-500/30">
                   <HeartPulse className="w-6 h-6 text-sky-400" />
                 </div>
-                <div className="transition-all duration-300">
+                <div>
                   <h2 className="font-extrabold text-white text-lg tracking-tight leading-none">REZOLA</h2>
                   <span className="text-xs text-slate-500 font-semibold tracking-wider uppercase">Hospitalario</span>
                 </div>
@@ -281,7 +251,6 @@ export default function DashboardPage() {
           )}
         </div>
 
-        {/* MENU */}
         <nav className="relative flex-1 overflow-y-auto p-5 space-y-4 bg-slate-950/30 backdrop-blur-xl">
           {!sidebarCollapsed && <div className="mb-4 px-2 text-xs uppercase tracking-[0.3em] text-sky-300">Módulos clínicos</div>}
           {[
@@ -347,18 +316,16 @@ export default function DashboardPage() {
         
         {/* BANNER SUPERIOR */}
         <header className="sticky top-0 z-20 bg-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-6">
-          <div className="flex items-center gap-4">
-            <div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Panel de Control Clínico</h1>
-              <p className="text-slate-500 mt-1">Estadística hospitalaria integral y productividad de personal.</p>
-            </div>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight text-slate-900">Panel de Control Clínico</h1>
+            <p className="text-slate-500 mt-1">Estadística hospitalaria integral y productividad de personal en tiempo real.</p>
           </div>
 
           <div className="flex items-center gap-3 self-start md:self-auto">
             {reconnecting && (
               <span className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-3 py-1.5 rounded-xl text-xs font-semibold animate-pulse">
                 <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                SQL Reconectando...
+                SIGH Servidor Reconectando...
               </span>
             )}
             <button
@@ -377,7 +344,6 @@ export default function DashboardPage() {
                 type="button"
                 onClick={() => setProfileMenuOpen((prev) => !prev)}
                 className="w-11 h-11 rounded-full bg-slate-900 text-white flex items-center justify-center font-semibold uppercase shadow-lg border border-slate-800"
-                aria-label="Abrir menú de usuario"
               >
                 {getUserInitial()}
               </button>
@@ -406,47 +372,86 @@ export default function DashboardPage() {
           </div>
         </header>
 
-        {loading ? (
-          /* PANTALLA CARGANDO DATOS */
+        {loading || !data ? (
           <div className="min-h-[400px] flex flex-col items-center justify-center bg-white border border-slate-100 rounded-3xl p-10 shadow-sm">
             <div className="w-12 h-12 border-4 border-slate-100 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-            <p className="text-slate-500 text-sm font-semibold">Cargando indicadores clínicos...</p>
+            <p className="text-slate-500 text-sm font-semibold">Consolidando métricas de la Intranet Hospitalaria...</p>
           </div>
         ) : (
           <>
-            {/* GRID DE CARDS KPI */}
+            {/* GRID DE CARDS KPI CONECTADOS A DATA REAL */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {kpis.map((kpi) => (
-                <div
-                  key={kpi.id}
-                  className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group"
-                >
-                  <div className="space-y-2">
-                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                      {kpi.titulo}
-                    </span>
-                    <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
-                      {kpi.valor}
-                    </h3>
-                    <span
-                      className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${
-                        kpi.esPositivo ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                      }`}
-                    >
-                      {kpi.cambio}
-                    </span>
-                  </div>
-                  <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
-                    {getKpiIcon(kpi.icono)}
-                  </div>
+              
+              {/* Card 1: Consulta Externa */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Consultas Médicas</span>
+                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+                    {data.kpis.consultas_medicas.toLocaleString()}
+                  </h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.consultas_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {data.kpis.consultas_tendencia >= 0 ? `+${data.kpis.consultas_tendencia}%` : `${data.kpis.consultas_tendencia}%`} vs mes anterior
+                  </span>
                 </div>
-              ))}
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                  <UserCheck className="w-8 h-8 text-sky-500" />
+                </div>
+              </div>
+
+              {/* Card 2: Cirugías */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Cirugías Exitosas</span>
+                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+                    {data.kpis.cirugias_exitosas.toLocaleString()}
+                  </h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.cirugias_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {data.kpis.cirugias_tendencia >= 0 ? `+${data.kpis.cirugias_tendencia}%` : `${data.kpis.cirugias_tendencia}%`} vs mes anterior
+                  </span>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                  <Activity className="w-8 h-8 text-blue-500" />
+                </div>
+              </div>
+
+              {/* Card 3: Emergencias */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Atenciones Emergencia</span>
+                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+                    {data.kpis.atenciones_emergencia.toLocaleString()}
+                  </h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.emergencia_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {data.kpis.emergencia_tendencia >= 0 ? `+${data.kpis.emergencia_tendencia}%` : `${data.kpis.emergencia_tendencia}%`} vs mes anterior
+                  </span>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                  <AlertTriangle className="w-8 h-8 text-amber-500" />
+                </div>
+              </div>
+
+              {/* Card 4: Camas */}
+              <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm hover:shadow-md hover:-translate-y-1 transition-all duration-300 flex items-center justify-between group">
+                <div className="space-y-2">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Ocupación de Camas</span>
+                  <h3 className="text-3xl font-extrabold text-slate-800 tracking-tight">
+                    {data.kpis.ocupacion_camas}%
+                  </h3>
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.camas_tendencia >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                    {data.kpis.camas_tendencia >= 0 ? `+${data.kpis.camas_tendencia}%` : `${data.kpis.camas_tendencia}%`} esta semana
+                  </span>
+                </div>
+                <div className="w-16 h-16 rounded-2xl bg-slate-50 flex items-center justify-center group-hover:scale-105 transition-transform duration-300">
+                  <Bed className="w-8 h-8 text-teal-500" />
+                </div>
+              </div>
+
             </div>
 
-            {/* SECCIÓN DE GRÁFICOS */}
+            {/* SECCIÓN DE GRÁFICOS INTERACTIVOS */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
               
-              {/* GRAFICO 1: PRODUCTIVIDAD */}
+              {/* GRÁFICO 1: RENDIMIENTO DE CONSULTAS (BARRAS) */}
               <div className="bg-white border border-slate-100 p-6 md:p-8 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                   <h3 className="font-extrabold text-lg text-slate-900">Rendimiento Mensual de Consultas</h3>
@@ -456,7 +461,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={productividad} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <BarChart data={data.rendimiento_mensual} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                       <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} tickLine={false} />
                       <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} />
@@ -464,14 +469,14 @@ export default function DashboardPage() {
                         contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }}
                         itemStyle={{ color: '#38bdf8' }}
                       />
-                      <Bar dataKey="consultas" fill="#2563eb" radius={[6, 6, 0, 0]} name="Consultas" />
-                      <Bar dataKey="emergencias" fill="#0ea5e9" radius={[6, 6, 0, 0]} name="Emergencias" />
+                      {/* Mapeo del eje de consultas usando el campo "cantidad" devuelto por el servicio */}
+                      <Bar dataKey="cantidad" fill="#2563eb" radius={[6, 6, 0, 0]} name="Atenciones" />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
               </div>
 
-              {/* GRAFICO 2: ACTIVIDAD DE CIRUGÍAS */}
+              {/* GRÁFICO 2: HISTORIAL QUIRÚRGICO (ÁREA) */}
               <div className="bg-white border border-slate-100 p-6 md:p-8 rounded-3xl shadow-sm space-y-4">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-4">
                   <h3 className="font-extrabold text-lg text-slate-900">Historial Quirúrgico Complejo</h3>
@@ -481,7 +486,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="w-full h-80">
                   <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={productividad} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <AreaChart data={data.historial_quirurgico} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                       <defs>
                         <linearGradient id="colorCirugia" x1="0" y1="0" x2="0" y2="1">
                           <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
@@ -495,9 +500,10 @@ export default function DashboardPage() {
                         contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }}
                         itemStyle={{ color: '#10b981' }}
                       />
+                      {/* Mapeo del eje quirúrgico usando el campo "cantidad" devuelto por el servicio */}
                       <Area
                         type="monotone"
-                        dataKey="cirugias"
+                        dataKey="cantidad"
                         stroke="#10b981"
                         strokeWidth={3}
                         fillOpacity={1}
@@ -511,7 +517,7 @@ export default function DashboardPage() {
 
             </div>
 
-            {/* SECCIÓN INFERIOR: ACCESOS RÁPIDOS Y MÓDULOS DE CRECIMIENTO */}
+            {/* SECCIÓN INFERIOR: ACCESOS RÁPIDOS */}
             <div className="bg-gradient-to-br from-white to-slate-50 border border-slate-100 p-8 rounded-[32px] shadow-sm space-y-6">
               <div>
                 <h3 className="font-extrabold text-xl text-slate-900">Módulos Administrativos y de Control</h3>
@@ -521,8 +527,6 @@ export default function DashboardPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                
-                {/* CARD 1: FIRMA DIGITAL */}
                 <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center shrink-0">
                     <Signature className="w-6 h-6 text-blue-600" />
@@ -535,7 +539,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* CARD 2: AUDITORÍA */}
                 <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center shrink-0">
                     <ShieldCheck className="w-6 h-6 text-indigo-600" />
@@ -548,7 +551,6 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                {/* CARD 3: REPORTES RAPIDOS */}
                 <div className="bg-white border border-slate-100 p-5 rounded-2xl shadow-sm hover:shadow-md transition flex items-start gap-4">
                   <div className="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
                     <FileText className="w-6 h-6 text-emerald-600" />
@@ -560,8 +562,8 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 </div>
-
               </div>
+
             </div>
           </>
         )}
