@@ -10,7 +10,7 @@ export class DashboardService {
       const anioActual = fechaActual.getFullYear();
       const mesActual = fechaActual.getMonth() + 1;
 
-      // Consumo en paralelo pasando año y mes actual al repositorio
+      // Consumo en paralelo pasando año y mes actual al repositorio optimizado
       const [kpisRaw, rendimientoRaw, horasRaw] = await Promise.all([
         this.dashboardRepository.getKpisGlobales(anioActual, mesActual),
         this.dashboardRepository.getRendimientoMensual(anioActual),
@@ -22,10 +22,6 @@ export class DashboardService {
         if (!anterior || anterior === 0) return 0;
         return parseFloat((((actual - anterior) / anterior) * 100).toFixed(1));
       };
-
-      const camasPorcentaje = kpisRaw.CamasTotales > 0 
-        ? parseFloat(((kpisRaw.CamasOcupadas / kpisRaw.CamasTotales) * 100).toFixed(1))
-        : 0;
 
       // FORMATEADOR 1 (Izquierdo): Estructura de Meses para el gráfico de barras
       const rendimientoMensualFormateado = this.nombresMeses.map((mesNombre, indice) => {
@@ -51,20 +47,20 @@ export class DashboardService {
         success: true,
         data: {
           kpis: {
-            // 1. Consultas Médicas Anuales + Tendencia mensual real
-            consultas_medicas: kpisRaw.ConsultasAnual || 0, 
+            // 1. Consultas Médicas: Cambiado a data del MES ACTUAL real
+            consultas_medicas: kpisRaw.ConsultasMesActual || 0, 
             consultas_tendencia: calcularTendencia(kpisRaw.ConsultasMesActual, kpisRaw.ConsultasMesAnterior),
             
-            // 2. Carga Total Anual del Hospital + Tendencia mensual real
-            cirugias_exitosas: kpisRaw.TotalAnual || 0, 
-            cirugias_tendencia: calcularTendencia(kpisRaw.TotalMesActual, kpisRaw.TotalMesAnterior),
+            // 2. Cirugías Exitosas: Cambiado a data de CIRUGÍAS del MES ACTUAL real (¡Ya no es el TotalAnual!)
+            cirugias_exitosas: kpisRaw.CirugiasMesActual || 0, 
+            cirugias_tendencia: calcularTendencia(kpisRaw.CirugiasMesActual, kpisRaw.CirugiasMesAnterior),
             
-            // 3. Atenciones de Emergencia Anuales + Tendencia mensual real
-            atenciones_emergencia: kpisRaw.EmergenciasAnual || 0, 
+            // 3. Atenciones de Emergencia: Cambiado a data de EMERGENCIA del MES ACTUAL real
+            atenciones_emergencia: kpisRaw.EmergenciasMesActual || 0, 
             emergencia_tendencia: calcularTendencia(kpisRaw.EmergenciasMesActual, kpisRaw.EmergenciasMesAnterior),
             
-            // 4. Ocupación de Camas Actual (No requiere tendencia histórica)
-            ocupacion_camas: camasPorcentaje,
+            // 4. Ocupación de Camas Actual: Viene calculado directamente y exacto desde la query SQL
+            ocupacion_camas: kpisRaw.PorcentajeOcupacionCamas || 0,
             camas_tendencia: 0
           },
           rendimiento_mensual: rendimientoMensualFormateado,
