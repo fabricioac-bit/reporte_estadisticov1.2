@@ -6,34 +6,73 @@ export interface MensualRaw {
   Cantidad: number;
 }
 
+export interface RendimientoServicioRaw {
+  IdTipoServicio: number;
+  ServicioNombre: string;
+  MesNum: number;
+  Cant_Atendidos: number;
+  Cant_NoAtendidos: number;
+  Cant_Eliminadas: number;
+}
+
+export interface FinanciamientoServicioRaw {
+  IdTipoServicio: number;
+  ServicioNombre: string;
+  IdFuenteFinanciamiento: number;
+  NombreFuente: string;
+  Cant_Atendidos: number;
+}
+
 export class DashboardRepository {
-  // 1. KPIs Globales: Totales anuales + variables mensuales para calcular tendencias reales
+
   async getKpisGlobales(anio: number, mes: number): Promise<any> {
     const query = `
-      SELECT 
-        -- Consulta Externa: Mes Actual (con filtros consistentes)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
-         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes 
-           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1 
+      SELECT
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes
+           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1
            AND IdTipoServicio = 1 AND idEstadoAtencion <> 0) as ConsultasMesActual,
-        
-        -- Consulta Externa: Mes Anterior (con filtros consistentes)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
-         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) 
-           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1 
+
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1)
+           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1
            AND IdTipoServicio = 1 AND idEstadoAtencion <> 0) as ConsultasMesAnterior,
-        
-        -- Emergencia: Mes Actual (con filtros consistentes)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
-         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes 
-           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1 
+
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1
            AND IdTipoServicio = 2 AND idEstadoAtencion <> 0) as EmergenciasMesActual,
-        
-        -- Emergencia: Mes Anterior (con filtros consistentes)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
-         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) 
-           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1 
-           AND IdTipoServicio = 2 AND idEstadoAtencion <> 0) as EmergenciasMesAnterior
+
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1)
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1
+           AND IdTipoServicio = 2 AND idEstadoAtencion <> 0) as EmergenciasMesAnterior,
+
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1
+           AND IdTipoServicio = 3 AND idEstadoAtencion <> 0) as HospitalizacionMesActual,
+
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1)
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1
+           AND IdTipoServicio = 3 AND idEstadoAtencion <> 0) as HospitalizacionMesAnterior,
+
+        (SELECT SUM(CASE WHEN IdPaciente IS NOT NULL THEN 1 ELSE 0 END)
+         FROM Camas
+         WHERE IdServicioPropietario IN (218,216,213,219,420,399,400,401,290,255,249,6,405,179,2,318,317)) as Camas_Ocupadas_Hosp,
+
+        (SELECT SUM(CASE WHEN IdPaciente IS NULL THEN 1 ELSE 0 END)
+         FROM Camas
+         WHERE IdServicioPropietario IN (218,216,213,219,420,399,400,401,290,255,249,6,405,179,2,318,317)) as Camas_Desocupadas_Hosp,
+
+        (SELECT SUM(CASE WHEN IdPaciente IS NOT NULL THEN 1 ELSE 0 END)
+         FROM Camas
+         WHERE IdServicioPropietario IN (385,386,387,104,86,310)) as Camas_Ocupadas_Emerg,
+
+        (SELECT SUM(CASE WHEN IdPaciente IS NULL THEN 1 ELSE 0 END)
+         FROM Camas
+         WHERE IdServicioPropietario IN (385,386,387,104,86,310)) as Camas_Desocupadas_Emerg
     `;
 
     const result = await executeQuery<any>(query, {
@@ -44,11 +83,8 @@ export class DashboardRepository {
     return result.recordset[0] || null;
   }
 
-  // 2. Gráfico Izquierdo: Volumen de Consulta Externa por MESES (dinámico)
   async getRendimientoMensual(anio: number, mesHasta?: number): Promise<MensualRaw[]> {
-    // Si no se especifica mes, usa el mes actual para limitar el rango
     const mesFin = mesHasta || new Date().getMonth() + 1;
-
     const query = `
       SELECT 
         MONTH(FechaIngreso) as MesNum,
@@ -63,19 +99,15 @@ export class DashboardRepository {
       GROUP BY MONTH(FechaIngreso)
       ORDER BY MONTH(FechaIngreso) ASC
     `;
-
     const result = await executeQuery<MensualRaw>(query, {
       anio: { type: mssql.Int, value: anio },
       mesFin: { type: mssql.Int, value: mesFin }
     });
-
     return result.recordset;
   }
 
-  // 3. Gráfico Emergencia: Volumen de Emergencia por MESES (dinámico)
   async getRendimientoEmergencia(anio: number, mesHasta?: number): Promise<MensualRaw[]> {
     const mesFin = mesHasta || new Date().getMonth() + 1;
-
     const query = `
       SELECT 
         MONTH(FechaIngreso) as MesNum,
@@ -90,16 +122,13 @@ export class DashboardRepository {
       GROUP BY MONTH(FechaIngreso)
       ORDER BY MONTH(FechaIngreso) ASC
     `;
-
     const result = await executeQuery<MensualRaw>(query, {
       anio: { type: mssql.Int, value: anio },
       mesFin: { type: mssql.Int, value: mesFin }
     });
-
     return result.recordset;
   }
 
-  // 4. Gráfico Derecho: Volumen agrupado por HORAS
   async getDemandaPorHoras(anio: number): Promise<MensualRaw[]> {
     const query = `
       SELECT 
@@ -111,11 +140,88 @@ export class DashboardRepository {
       GROUP BY DATEPART(HOUR, FechaIngreso)
       ORDER BY MesNum ASC
     `;
-
     const result = await executeQuery<MensualRaw>(query, {
       anio: { type: mssql.Int, value: anio }
     });
+    return result.recordset;
+  }
 
+  async getRendimientoUnificado(anio: number, mesHasta: number): Promise<RendimientoServicioRaw[]> {
+    const query = `
+      SELECT
+        IdTipoServicio,
+        CASE IdTipoServicio
+          WHEN 1 THEN 'CE'
+          WHEN 2 THEN 'Emergencia'
+          WHEN 3 THEN 'Hospitalización'
+        END AS ServicioNombre,
+        MONTH(FechaIngreso) AS MesNum,
+        SUM(CASE WHEN idEstadoAtencion <> 0
+          AND ((IdTipoServicio = 1 AND FyHFinal IS NOT NULL)
+            OR (IdTipoServicio IN (2,3) AND FechaEgreso IS NOT NULL))
+          THEN 1 ELSE 0 END) AS Cant_Atendidos,
+        SUM(CASE WHEN idEstadoAtencion <> 0
+          AND ((IdTipoServicio = 1 AND FyHFinal IS NULL)
+            OR (IdTipoServicio IN (2,3) AND FechaEgreso IS NULL))
+          THEN 1 ELSE 0 END) AS Cant_NoAtendidos,
+        SUM(CASE WHEN idEstadoAtencion = 0 THEN 1 ELSE 0 END) AS Cant_Eliminadas
+      FROM sigh.dbo.Atenciones
+      WHERE EsPacienteExterno <> 1
+        AND IdTipoServicio IN (1, 2, 3)
+        AND YEAR(FechaIngreso) = @anio
+        AND MONTH(FechaIngreso) BETWEEN 1 AND @mesHasta
+      GROUP BY IdTipoServicio, MONTH(FechaIngreso)
+      ORDER BY IdTipoServicio, MONTH(FechaIngreso)
+    `;
+    const result = await executeQuery<RendimientoServicioRaw>(query, {
+      anio: { type: mssql.Int, value: anio },
+      mesHasta: { type: mssql.Int, value: mesHasta }
+    });
+    return result.recordset;
+  }
+
+  // Solo Atendidos para financiamiento
+  async getFinanciamientoPorServicio(anio: number, mesHasta: number): Promise<FinanciamientoServicioRaw[]> {
+    const query = `
+      SELECT
+        a.IdTipoServicio,
+        CASE a.IdTipoServicio
+          WHEN 1 THEN 'CE'
+          WHEN 2 THEN 'Emergencia'
+          WHEN 3 THEN 'Hospitalización'
+        END AS ServicioNombre,
+        f.IdFuenteFinanciamiento,
+        f.Descripcion AS NombreFuente,
+        COUNT(a.IdAtencion) AS Cant_Atendidos
+      FROM sigh.dbo.Atenciones a
+      INNER JOIN sigh.dbo.FuentesFinanciamiento f
+        ON f.IdFuenteFinanciamiento = a.IdFuenteFinanciamiento
+      WHERE
+        a.EsPacienteExterno <> 1
+        AND a.idEstadoAtencion <> 0
+        AND a.IdTipoServicio IN (1, 2, 3)
+        AND a.IdFuenteFinanciamiento IN (1, 5, 3, 4, 7, 9, 16, 17)
+        AND YEAR(a.FechaIngreso) = @anio
+        AND MONTH(a.FechaIngreso) BETWEEN 1 AND @mesHasta
+        AND ((a.IdTipoServicio = 1 AND a.FyHFinal IS NOT NULL)
+          OR (a.IdTipoServicio IN (2,3) AND a.FechaEgreso IS NOT NULL))
+      GROUP BY
+        a.IdTipoServicio,
+        CASE a.IdTipoServicio
+          WHEN 1 THEN 'CE'
+          WHEN 2 THEN 'Emergencia'
+          WHEN 3 THEN 'Hospitalización'
+        END,
+        f.IdFuenteFinanciamiento,
+        f.Descripcion
+      ORDER BY
+        a.IdTipoServicio,
+        f.IdFuenteFinanciamiento
+    `;
+    const result = await executeQuery<FinanciamientoServicioRaw>(query, {
+      anio: { type: mssql.Int, value: anio },
+      mesHasta: { type: mssql.Int, value: mesHasta }
+    });
     return result.recordset;
   }
 }
