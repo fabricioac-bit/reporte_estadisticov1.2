@@ -11,24 +11,29 @@ export class DashboardRepository {
   async getKpisGlobales(anio: number, mes: number): Promise<any> {
     const query = `
       SELECT 
-        -- Totales del Año Actual (Para el número grande de la tarjeta)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND IdTipoServicio = 1) as ConsultasAnual,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND IdTipoServicio = 2) as EmergenciasAnual,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio) as TotalAnual,
+        -- Consulta Externa: Mes Actual (con filtros consistentes)
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes 
+           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1 
+           AND IdTipoServicio = 1 AND idEstadoAtencion <> 0) as ConsultasMesActual,
         
-        -- Datos del Mes Actual (Para calcular la tendencia)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes AND IdTipoServicio = 1) as ConsultasMesActual,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes AND IdTipoServicio = 2) as EmergenciasMesActual,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes) as TotalMesActual,
+        -- Consulta Externa: Mes Anterior (con filtros consistentes)
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) 
+           AND FyHFinal IS NOT NULL AND EsPacienteExterno <> 1 
+           AND IdTipoServicio = 1 AND idEstadoAtencion <> 0) as ConsultasMesAnterior,
         
-        -- Datos del Mes Anterior (Para comparar la tendencia)
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) AND IdTipoServicio = 1) as ConsultasMesAnterior,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) AND IdTipoServicio = 2) as EmergenciasMesAnterior,
-        (SELECT COUNT(1) FROM sigh.dbo.Atenciones WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1)) as TotalMesAnterior,
+        -- Emergencia: Mes Actual (con filtros consistentes)
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = @mes 
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1 
+           AND IdTipoServicio = 2 AND idEstadoAtencion <> 0) as EmergenciasMesActual,
         
-        -- Censo de Camas en tiempo real
-        (SELECT COUNT(1) FROM sigh.dbo.Camas WHERE IdPaciente IS NOT NULL AND IdPaciente <> 0) as CamasOcupadas,
-        (SELECT COUNT(1) FROM sigh.dbo.Camas) as CamasTotales
+        -- Emergencia: Mes Anterior (con filtros consistentes)
+        (SELECT COUNT(1) FROM sigh.dbo.Atenciones 
+         WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) = (@mes - 1) 
+           AND FechaEgreso IS NOT NULL AND EsPacienteExterno <> 1 
+           AND IdTipoServicio = 2 AND idEstadoAtencion <> 0) as EmergenciasMesAnterior
     `;
 
     const result = await executeQuery<any>(query, {
@@ -39,26 +44,62 @@ export class DashboardRepository {
     return result.recordset[0] || null;
   }
 
-  // 2. Gráfico Izquierdo: Volumen por MESES
-  async getRendimientoMensual(anio: number): Promise<MensualRaw[]> {
+  // 2. Gráfico Izquierdo: Volumen de Consulta Externa por MESES (dinámico)
+  async getRendimientoMensual(anio: number, mesHasta?: number): Promise<MensualRaw[]> {
+    // Si no se especifica mes, usa el mes actual para limitar el rango
+    const mesFin = mesHasta || new Date().getMonth() + 1;
+
     const query = `
       SELECT 
         MONTH(FechaIngreso) as MesNum,
         COUNT(IdAtencion) as Cantidad
       FROM sigh.dbo.Atenciones
-      WHERE YEAR(FechaIngreso) = @anio AND MONTH(FechaIngreso) BETWEEN 1 AND 6
+      WHERE YEAR(FechaIngreso) = @anio
+        AND MONTH(FechaIngreso) BETWEEN 1 AND @mesFin
+        AND FyHFinal IS NOT NULL
+        AND EsPacienteExterno <> 1
+        AND IdTipoServicio = 1
+        AND idEstadoAtencion <> 0
       GROUP BY MONTH(FechaIngreso)
       ORDER BY MONTH(FechaIngreso) ASC
     `;
 
     const result = await executeQuery<MensualRaw>(query, {
-      anio: { type: mssql.Int, value: anio }
+      anio: { type: mssql.Int, value: anio },
+      mesFin: { type: mssql.Int, value: mesFin }
     });
 
     return result.recordset;
   }
 
-  // 3. Gráfico Derecho: Volumen agrupado por HORAS
+  // 3. Gráfico Emergencia: Volumen de Emergencia por MESES (dinámico)
+  async getRendimientoEmergencia(anio: number, mesHasta?: number): Promise<MensualRaw[]> {
+    const mesFin = mesHasta || new Date().getMonth() + 1;
+
+    const query = `
+      SELECT 
+        MONTH(FechaIngreso) as MesNum,
+        COUNT(IdAtencion) as Cantidad
+      FROM sigh.dbo.Atenciones
+      WHERE YEAR(FechaIngreso) = @anio
+        AND MONTH(FechaIngreso) BETWEEN 1 AND @mesFin
+        AND FechaEgreso IS NOT NULL
+        AND EsPacienteExterno <> 1
+        AND IdTipoServicio = 2
+        AND idEstadoAtencion <> 0
+      GROUP BY MONTH(FechaIngreso)
+      ORDER BY MONTH(FechaIngreso) ASC
+    `;
+
+    const result = await executeQuery<MensualRaw>(query, {
+      anio: { type: mssql.Int, value: anio },
+      mesFin: { type: mssql.Int, value: mesFin }
+    });
+
+    return result.recordset;
+  }
+
+  // 4. Gráfico Derecho: Volumen agrupado por HORAS
   async getDemandaPorHoras(anio: number): Promise<MensualRaw[]> {
     const query = `
       SELECT 

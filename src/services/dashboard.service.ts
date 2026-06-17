@@ -2,18 +2,19 @@ import { DashboardRepository, MensualRaw } from '../repositories/dashboard.repos
 
 export class DashboardService {
   private dashboardRepository = new DashboardRepository();
-  private nombresMeses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun'];
+  private todosLosMeses = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
-  async getDashboardData() {
+  async getDashboardData(anio?: number, mes?: number) {
     try {
       const fechaActual = new Date();
-      const anioActual = fechaActual.getFullYear();
-      const mesActual = fechaActual.getMonth() + 1;
+      const anioActual = anio || fechaActual.getFullYear();
+      const mesActual = mes || fechaActual.getMonth() + 1;
 
       // Consumo en paralelo pasando año y mes actual al repositorio optimizado
-      const [kpisRaw, rendimientoRaw, horasRaw] = await Promise.all([
+      const [kpisRaw, rendimientoRaw, emergenciaRaw, horasRaw] = await Promise.all([
         this.dashboardRepository.getKpisGlobales(anioActual, mesActual),
-        this.dashboardRepository.getRendimientoMensual(anioActual),
+        this.dashboardRepository.getRendimientoMensual(anioActual, mesActual),
+        this.dashboardRepository.getRendimientoEmergencia(anioActual, mesActual),
         this.dashboardRepository.getDemandaPorHoras(anioActual)
       ]);
 
@@ -23,8 +24,9 @@ export class DashboardService {
         return parseFloat((((actual - anterior) / anterior) * 100).toFixed(1));
       };
 
-      // FORMATEADOR 1 (Izquierdo): Estructura de Meses para el gráfico de barras
-      const rendimientoMensualFormateado = this.nombresMeses.map((mesNombre, indice) => {
+      // FORMATEADOR 1 (Izquierdo): Estructura de Meses dinámicos para el gráfico de barras
+      const mesesParaMostrar = this.todosLosMeses.slice(0, mesActual);
+      const rendimientoMensualFormateado = mesesParaMostrar.map((mesNombre, indice) => {
         const mesNumero = indice + 1;
         const registro = rendimientoRaw.find(r => r.MesNum === mesNumero);
         return {
@@ -47,22 +49,20 @@ export class DashboardService {
         success: true,
         data: {
           kpis: {
-            // 1. Consultas Médicas: Cambiado a data del MES ACTUAL real
             consultas_medicas: kpisRaw.ConsultasMesActual || 0, 
             consultas_tendencia: calcularTendencia(kpisRaw.ConsultasMesActual, kpisRaw.ConsultasMesAnterior),
-            
-            // 2. Cirugías Exitosas: Cambiado a data de CIRUGÍAS del MES ACTUAL real (¡Ya no es el TotalAnual!)
-            cirugias_exitosas: kpisRaw.CirugiasMesActual || 0, 
-            cirugias_tendencia: calcularTendencia(kpisRaw.CirugiasMesActual, kpisRaw.CirugiasMesAnterior),
-            
-            // 3. Atenciones de Emergencia: Cambiado a data de EMERGENCIA del MES ACTUAL real
             atenciones_emergencia: kpisRaw.EmergenciasMesActual || 0, 
             emergencia_tendencia: calcularTendencia(kpisRaw.EmergenciasMesActual, kpisRaw.EmergenciasMesAnterior),
-            
-            // 4. Ocupación de Camas Actual: Viene calculado directamente y exacto desde la query SQL
-            ocupacion_camas: kpisRaw.PorcentajeOcupacionCamas || 0,
-            camas_tendencia: 0
           },
+          // Emergencia: misma estructura que rendimiento_mensual
+          emergencia_mensual: mesesParaMostrar.map((mesNombre, indice) => {
+            const mesNumero = indice + 1;
+            const registro = emergenciaRaw.find(r => r.MesNum === mesNumero);
+            return {
+              mes: mesNombre,
+              cantidad: registro ? registro.Cantidad : 0
+            };
+          }),
           rendimiento_mensual: rendimientoMensualFormateado,
           historial_quirurgico: historialQuirurgicoFormateado
         }
