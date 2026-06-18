@@ -256,6 +256,11 @@ ORDER BY Medico ASC
       .map((dia) => `[${dia.clave}]`)
       .join(', ');
 
+    // CAMBIO QUIRÚRGICO FINAL:
+    // 1. Especialidad ahora sale de pr.IdEspecialidad (ProgramacionMedica), NO de a.IdEspecialidadMedico (Atenciones)
+    //    -> Evita duplicados porque pr.IdEspecialidad siempre existe, haya atención o no.
+    // 2. El filtro de "atendido" sigue en el COUNT(CASE...), no en el WHERE
+    //    -> Permite que el día con programación pero 0 atenciones siga apareciendo (sale 0, no desaparece).
     const query = `
 SELECT
     Medico,
@@ -281,12 +286,13 @@ FROM (
             WHEN @DIA_CON_MES = 1 THEN RIGHT('0' + CAST(MONTH(pr.fecha) AS VARCHAR(2)), 2) + '-' + RIGHT('0' + CAST(DAY(pr.fecha) AS VARCHAR(2)), 2)
             ELSE RIGHT('0' + CAST(DAY(pr.fecha) AS VARCHAR(2)), 2)
         END AS Dia,
-        COUNT(a.IdAtencion) AS Cantidad
+        COUNT(CASE WHEN a.FyHFinal IS NOT NULL THEN a.IdAtencion END) AS Cantidad
     FROM ProgramacionMedica pr
     LEFT JOIN Citas c
         ON c.IdProgramacion = pr.IdProgramacion
     LEFT JOIN Atenciones a
         ON a.IdAtencion = c.IdAtencion
+        AND a.IdTipoServicio = 1
     LEFT JOIN Medicos m
         ON m.IdMedico = pr.IdMedico
     INNER JOIN Empleados e
@@ -294,11 +300,9 @@ FROM (
     LEFT JOIN TiposEmpleado te
         ON te.IdTipoEmpleado = e.IdTipoEmpleado
     LEFT JOIN Especialidades esp
-        ON esp.IdEspecialidad = a.IdEspecialidadMedico
+        ON esp.IdEspecialidad = pr.IdEspecialidad
     WHERE pr.fecha >= @FECHAINICIO
       AND pr.fecha < DATEADD(DAY, 1, @FECHAFIN)
-      AND a.FyHFinal IS NOT NULL
-      AND a.IdTipoServicio = 1
       AND e.IdEmpleado <> 3766
       AND (@DEPARTAMENTO_ID IS NULL OR esp.IdDepartamento = @DEPARTAMENTO_ID)
       AND (@ESPECIALIDAD_ID IS NULL OR esp.IdEspecialidad = @ESPECIALIDAD_ID)
@@ -310,7 +314,7 @@ FROM (
         e.Nombres,
         te.Descripcion,
         esp.Nombre,
-        a.IdEspecialidadMedico,
+        pr.IdEspecialidad,
         pr.HoraInicio,
         pr.fecha
 ) src
