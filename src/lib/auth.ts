@@ -8,7 +8,8 @@ export async function setSession(payload: JWTPayload): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.set(COOKIE_NAME, token, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+  //secure: process.env.NODE_ENV === 'production',
+    secure: false,
     sameSite: 'lax',
     maxAge: 60 * 60 * 8, // 8 horas
     path: '/',
