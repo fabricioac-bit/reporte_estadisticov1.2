@@ -149,29 +149,36 @@ export class DashboardRepository {
   async getRendimientoUnificado(anio: number, mesHasta: number): Promise<RendimientoServicioRaw[]> {
     const query = `
       SELECT
-        IdTipoServicio,
-        CASE IdTipoServicio
+        a.IdTipoServicio,
+        CASE a.IdTipoServicio
           WHEN 1 THEN 'CE'
           WHEN 2 THEN 'Emergencia'
           WHEN 3 THEN 'Hospitalización'
         END AS ServicioNombre,
-        MONTH(FechaIngreso) AS MesNum,
-        SUM(CASE WHEN idEstadoAtencion <> 0
-          AND ((IdTipoServicio = 1 AND FyHFinal IS NOT NULL)
-            OR (IdTipoServicio IN (2,3) AND FechaEgreso IS NOT NULL))
+        MONTH(a.FechaIngreso) AS MesNum,
+        SUM(CASE WHEN a.idEstadoAtencion <> 0
+          AND ((a.IdTipoServicio = 1 AND a.FyHFinal IS NOT NULL)
+            OR (a.IdTipoServicio IN (2,3) AND a.FechaEgreso IS NOT NULL))
           THEN 1 ELSE 0 END) AS Cant_Atendidos,
-        SUM(CASE WHEN idEstadoAtencion <> 0
-          AND ((IdTipoServicio = 1 AND FyHFinal IS NULL)
-            OR (IdTipoServicio IN (2,3) AND FechaEgreso IS NULL))
+        SUM(CASE WHEN a.idEstadoAtencion <> 0
+          AND ((a.IdTipoServicio = 1 AND a.FyHFinal IS NULL)
+            OR (a.IdTipoServicio IN (2,3) AND a.FechaEgreso IS NULL))
           THEN 1 ELSE 0 END) AS Cant_NoAtendidos,
-        SUM(CASE WHEN idEstadoAtencion = 0 THEN 1 ELSE 0 END) AS Cant_Eliminadas
-      FROM sigh.dbo.Atenciones
-      WHERE EsPacienteExterno <> 1
-        AND IdTipoServicio IN (1, 2, 3)
-        AND YEAR(FechaIngreso) = @anio
-        AND MONTH(FechaIngreso) BETWEEN 1 AND @mesHasta
-      GROUP BY IdTipoServicio, MONTH(FechaIngreso)
-      ORDER BY IdTipoServicio, MONTH(FechaIngreso)
+        SUM(CASE WHEN a.idEstadoAtencion = 0 THEN 1 ELSE 0 END) AS Cant_Eliminadas
+      FROM sigh.dbo.Atenciones a
+      INNER JOIN sigh.dbo.Especialidades esp
+          ON esp.IdEspecialidad = a.IdEspecialidadMedico
+      WHERE a.EsPacienteExterno <> 1
+        AND a.IdTipoServicio IN (1, 2, 3)
+        AND YEAR(a.FechaIngreso) = @anio
+        AND MONTH(a.FechaIngreso) BETWEEN 1 AND @mesHasta
+        AND a.FechaIngreso < CASE
+            WHEN MONTH(GETDATE()) = @mesHasta AND YEAR(GETDATE()) = @anio
+            THEN DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+            ELSE DATEADD(DAY, 1, EOMONTH(DATEFROMPARTS(@anio, @mesHasta, 1)))
+        END
+      GROUP BY a.IdTipoServicio, MONTH(a.FechaIngreso)
+      ORDER BY a.IdTipoServicio, MONTH(a.FechaIngreso)
     `;
     const result = await executeQuery<RendimientoServicioRaw>(query, {
       anio: { type: mssql.Int, value: anio },
@@ -180,7 +187,6 @@ export class DashboardRepository {
     return result.recordset;
   }
 
-  // Solo Atendidos para financiamiento
   async getFinanciamientoPorServicio(anio: number, mesHasta: number): Promise<FinanciamientoServicioRaw[]> {
     const query = `
       SELECT

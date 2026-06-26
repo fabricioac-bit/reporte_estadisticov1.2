@@ -302,7 +302,7 @@ export default function DashboardPage() {
                   {data.kpis.consultas_medicas.toLocaleString()}
                 </h3>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full inline-block ${data.kpis.consultas_tendencia >= 0 ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
-                  {data.kpis.consultas_tendencia >= 0 ? `+${data.kpis.consultas_tendencia}%` : `${data.kpis.consultas_tendencia}%`} vs mes pasados
+                  {data.kpis.consultas_tendencia >= 0 ? `+${data.kpis.consultas_tendencia}%` : `${data.kpis.consultas_tendencia}%`} vs mes pasado
                 </span>
               </div>
               <div className="w-11 h-11 rounded-xl bg-blue-50 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform duration-300 ml-2">
