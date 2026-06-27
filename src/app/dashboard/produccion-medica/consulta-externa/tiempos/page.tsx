@@ -52,6 +52,8 @@ interface TiemposData {
   evolucion: EvolucionMensual[];
   topEliminadas: EspecialidadTop[];
   topSinAtender: EspecialidadTop[];
+  todoEliminadas?: EspecialidadTop[];
+  todoSinAtender?: EspecialidadTop[];
 }
 
 const hoy = new Date();
@@ -93,8 +95,10 @@ export default function TiemposPage() {
 
   const topEliminadasOrdenado = [...(data?.topEliminadas ?? [])].sort((a, b) => b.Eliminadas - a.Eliminadas);
   const topSinAtenderOrdenado = [...(data?.topSinAtender ?? [])].sort((a, b) => b.SinAtender - a.SinAtender);
+  
+  const todoEliminadasOrdenado = [...(data?.todoEliminadas ?? data?.topEliminadas ?? [])].sort((a, b) => b.Eliminadas - a.Eliminadas);
+  const todoSinAtenderOrdenado = [...(data?.todoSinAtender ?? data?.topSinAtender ?? [])].sort((a, b) => b.SinAtender - a.SinAtender);
 
-  // 📊 EXPORTAR PDF
   const exportarPDF = () => {
     if (!data) return;
 
@@ -127,7 +131,7 @@ export default function TiemposPage() {
             </tr>
           </thead>
           <tbody>
-            ${topEliminadasOrdenado.map(item => `
+            ${todoEliminadasOrdenado.map(item => `
               <tr>
                 <td style="border: 1px solid #ccc; padding: 8px;">${item.Especialidad}</td>
                 <td style="border: 1px solid #ccc; padding: 8px; text-align: center; color: #dc2626; font-weight: bold;">${item.Eliminadas}</td>
@@ -146,7 +150,7 @@ export default function TiemposPage() {
             </tr>
           </thead>
           <tbody>
-            ${topSinAtenderOrdenado.map(item => `
+            ${todoSinAtenderOrdenado.map(item => `
               <tr>
                 <td style="border: 1px solid #ccc; padding: 8px;">${item.Especialidad}</td>
                 <td style="border: 1px solid #ccc; padding: 8px; text-align: center; color: #f59e0b; font-weight: bold;">${item.SinAtender}</td>
@@ -167,7 +171,6 @@ export default function TiemposPage() {
     });
   };
 
-  // 📈 EXPORTAR EXCEL
   const exportarExcel = async () => {
     if (!data) return;
 
@@ -187,7 +190,7 @@ export default function TiemposPage() {
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
 
-    topEliminadasOrdenado.forEach((item) => {
+    todoEliminadasOrdenado.forEach((item) => {
       hoja.addRow([item.Especialidad, item.Eliminadas, item.TotalCitas]);
     });
 
@@ -205,7 +208,7 @@ export default function TiemposPage() {
       cell.alignment = { horizontal: 'center', vertical: 'middle' };
     });
 
-    topSinAtenderOrdenado.forEach((item) => {
+    todoSinAtenderOrdenado.forEach((item) => {
       hojaDesiertas.addRow([item.Especialidad, item.SinAtender, item.TotalCitas]);
     });
 
@@ -222,9 +225,9 @@ export default function TiemposPage() {
   };
 
   return (
-    <div className="flex flex-col h-full w-full">
-      {/* CABECERA FIJA */}
-      <div className="sticky top-0 z-20 bg-slate-50/80 backdrop-blur-xl border-b border-slate-100 pb-4">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-slate-50 p-4 space-y-3">
+      {/* HEADER CONTENEDOR ESTATICO */}
+      <div className="flex-none space-y-3">
         <NavbarUpper
           title="Indicadores de Consulta Externa"
           description="Seguimiento de citas totales, atendidas, desiertas y eliminadas."
@@ -232,214 +235,206 @@ export default function TiemposPage() {
           isRefreshLoading={loading}
         />
 
-        <div className="px-1 space-y-4">
-          <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Fecha Inicio</label>
-              <input
-                type="date"
-                value={fechaInicio}
-                onChange={(e) => setFechaInicio(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
-              />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end bg-white border border-slate-100 p-3 rounded-2xl shadow-sm">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fecha Inicio</label>
+            <input
+              type="date"
+              value={fechaInicio}
+              onChange={(e) => setFechaInicio(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fecha Fin</label>
+            <input
+              type="date"
+              value={fechaFin}
+              onChange={(e) => setFechaFin(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-700 outline-none focus:border-blue-500"
+            />
+          </div>
+          <button
+            onClick={loadData}
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3 py-2 rounded-lg shadow-sm flex items-center justify-center gap-1.5 transition"
+          >
+            <Search className="w-3.5 h-3.5" />
+            <span>Filtrar</span>
+          </button>
+        </div>
+
+        {/* KPIS DE TAMAÑO COMPACTADO */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <KpiCard title="Citas Totales" value={data?.indicadores.CitasTotales ?? 0} icon={<ClipboardList className="w-4 h-4" />} color="text-blue-600" bg="bg-blue-50" />
+          <KpiCard title="Citas Atendidas" value={data?.indicadores.CitasAtendidas ?? 0} icon={<CheckCircle2 className="w-4 h-4" />} color="text-emerald-600" bg="bg-emerald-50" />
+          <KpiCard title="Citas Desiertas" value={data?.indicadores.CitasDesiertas ?? 0} icon={<AlarmClock className="w-4 h-4" />} color="text-amber-600" bg="bg-amber-50" />
+          <KpiCard title="Citas Eliminadas" value={data?.indicadores.CitasEliminadas ?? 0} icon={<Ban className="w-4 h-4" />} color="text-red-600" bg="bg-red-50" />
+        </div>
+
+        {/* ACCIONES DE VISTA */}
+        <div className="flex gap-2 items-center">
+          <button
+            onClick={() => setVistaActiva('graficos')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+              vistaActiva === 'graficos'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            <span>Gráficos</span>
+          </button>
+          <button
+            onClick={() => setVistaActiva('tablas')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition ${
+              vistaActiva === 'tablas'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+            }`}
+          >
+            <Table2 className="w-3.5 h-3.5" />
+            <span>Tablas</span>
+          </button>
+
+          {vistaActiva === 'tablas' && (
+            <div className="ml-auto flex items-center gap-1.5">
+              <button
+                onClick={exportarPDF}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-white border border-red-200 text-red-600 hover:bg-red-50 transition"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>PDF</span>
+              </button>
+              <button
+                onClick={exportarExcel}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition"
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Excel</span>
+              </button>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Fecha Fin</label>
-              <input
-                type="date"
-                value={fechaFin}
-                onChange={(e) => setFechaFin(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm text-slate-700 outline-none focus:border-blue-500"
-              />
-            </div>
-            <button
-              onClick={loadData}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 py-2.5 rounded-xl shadow-md shadow-blue-500/10 flex items-center justify-center gap-2 transition"
-            >
-              <Search className="w-4 h-4" />
-              <span>Filtrar</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <KpiCard title="Citas Totales" value={data?.indicadores.CitasTotales ?? 0} icon={<ClipboardList />} color="text-blue-600" bg="bg-blue-50" />
-            <KpiCard title="Citas Atendidas" value={data?.indicadores.CitasAtendidas ?? 0} icon={<CheckCircle2 />} color="text-emerald-600" bg="bg-emerald-50" />
-            <KpiCard title="Citas Desiertas" value={data?.indicadores.CitasDesiertas ?? 0} icon={<AlarmClock />} color="text-amber-600" bg="bg-amber-50" />
-            <KpiCard title="Citas Eliminadas" value={data?.indicadores.CitasEliminadas ?? 0} icon={<Ban />} color="text-red-600" bg="bg-red-50" />
-          </div>
-
-          {/* BOTONES DE VISTA */}
-          <div className="flex gap-3">
-            <button
-              onClick={() => setVistaActiva('graficos')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition ${
-                vistaActiva === 'graficos'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Gráficos</span>
-            </button>
-            <button
-              onClick={() => setVistaActiva('tablas')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition ${
-                vistaActiva === 'tablas'
-                  ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
-              }`}
-            >
-              <Table2 className="w-4 h-4" />
-              <span>Tablas</span>
-            </button>
-
-            {/* BOTONES DE EXPORTACIÓN (Solo en vista tablas) */}
-            {vistaActiva === 'tablas' && (
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  onClick={exportarPDF}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-white border border-red-200 text-red-600 hover:bg-red-50 transition"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span>PDF</span>
-                </button>
-                <button
-                  onClick={exportarExcel}
-                  className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-white border border-emerald-200 text-emerald-600 hover:bg-emerald-50 transition"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Excel</span>
-                </button>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
-      {/* CONTENIDO SCROLLEABLE */}
-      <div className="flex-1 overflow-y-auto space-y-6 pt-4 pb-6">
+      {/* BLOQUE DINAMICO AJUSTADO AL viewport */}
+      <div className="flex-1 bg-white border border-slate-100 rounded-2xl shadow-sm p-4 min-h-0 overflow-hidden">
         {loading ? (
-          <div className="min-h-[300px] flex flex-col items-center justify-center bg-white border border-slate-100 rounded-3xl p-10 shadow-sm">
-            <div className="w-10 h-10 border-4 border-slate-100 border-t-blue-500 rounded-full animate-spin mb-3"></div>
-            <p className="text-slate-500 text-sm font-semibold">Cargando indicadores...</p>
+          <div className="h-full flex flex-col items-center justify-center">
+            <div className="w-8 h-8 border-3 border-slate-100 border-t-blue-500 rounded-full animate-spin mb-2"></div>
+            <p className="text-slate-500 text-xs font-semibold">Cargando indicadores...</p>
           </div>
         ) : error ? (
-          <div className="bg-red-50 border border-red-100 rounded-3xl p-5 text-red-700 text-sm font-semibold">
+          <div className="bg-red-50 border border-red-100 rounded-xl p-4 text-red-700 text-xs font-semibold">
             {error}
           </div>
         ) : data ? (
-          <>
-            {/* VISTA: GRÁFICOS */}
+          <div className="h-full w-full">
             {vistaActiva === 'graficos' && (
-              <>
-                <div className="bg-white border border-slate-100 p-6 rounded-3xl shadow-sm space-y-4">
-                  <div>
-                    <h3 className="font-extrabold text-lg text-slate-900">Evolución mensual</h3>
-                    <p className="text-xs text-slate-400 mt-0.5">Del {fechaInicio} al {fechaFin}</p>
-                  </div>
-                  <div className="w-full h-80">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={data.evolucion} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="mes" stroke="#94a3b8" fontSize={12} tickLine={false} />
-                        <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} allowDecimals={false} />
-                        <Tooltip contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '12px', border: 'none' }} />
-                        <Legend />
-                        <Bar dataKey="atendidas" fill="#10b981" radius={[4, 4, 0, 0]} name="Atendidas" label={{ position: 'top', fontSize: 10, fill: '#10b981', fontWeight: 'bold' }} />
-                        <Bar dataKey="desiertas" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Desiertas" label={{ position: 'top', fontSize: 10, fill: '#f59e0b', fontWeight: 'bold' }} />
-                        <Bar dataKey="eliminadas" fill="#ef4444" radius={[4, 4, 0, 0]} name="Eliminadas" label={{ position: 'top', fontSize: 10, fill: '#ef4444', fontWeight: 'bold' }} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
+              <div className="flex flex-col h-full space-y-2">
+                <div className="flex-none">
+                  <h3 className="font-bold text-sm text-slate-900">Evolución mensual</h3>
+                  <p className="text-[10px] text-slate-400">Del {fechaInicio} al {fechaFin}</p>
                 </div>
-              </>
+                <div className="flex-1 min-h-0 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={data.evolucion} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                      <XAxis dataKey="mes" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                      <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} allowDecimals={false} />
+                      <Tooltip contentStyle={{ background: '#0f172a', color: '#fff', borderRadius: '8px', border: 'none', fontSize: '11px' }} />
+                      <Legend wrapperStyle={{ fontSize: '11px', paddingTop: 4 }} />
+                      <Bar dataKey="atendidas" fill="#10b981" radius={[3, 3, 0, 0]} name="Atendidas" label={{ position: 'top', fontSize: 9, fill: '#10b981', fontWeight: 'bold' }} />
+                      <Bar dataKey="desiertas" fill="#f59e0b" radius={[3, 3, 0, 0]} name="Desiertas" label={{ position: 'top', fontSize: 9, fill: '#f59e0b', fontWeight: 'bold' }} />
+                      <Bar dataKey="eliminadas" fill="#ef4444" radius={[3, 3, 0, 0]} name="Eliminadas" label={{ position: 'top', fontSize: 9, fill: '#ef4444', fontWeight: 'bold' }} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
             )}
 
-            {/* VISTA: TABLAS */}
             {vistaActiva === 'tablas' && (
-              <>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
-                    <div className="p-5 border-b border-slate-100">
-                      <h3 className="font-extrabold text-lg text-slate-900">Especialidades que más eliminaron</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Citas con idEstadoAtencion = 0.</p>
-                      <div className="mt-2">
-                        <span className="text-3xl font-black text-red-600">{data.indicadores.CitasEliminadas}</span>
-                        <span className="text-xs text-slate-400 ml-2">eliminadas en total</span>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider">
-                            <th className="py-3 px-4">#</th>
-                            <th className="py-3 px-4">Especialidad</th>
-                            <th className="py-3 px-4 text-center">Eliminadas</th>
-                            <th className="py-3 px-4 text-center">Total Citas</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 text-slate-700">
-                          {topEliminadasOrdenado.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="py-10 text-center text-slate-400 text-sm">No hay datos.</td>
-                            </tr>
-                          ) : (
-                            topEliminadasOrdenado.map((item, i) => (
-                              <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-4 font-bold text-slate-400">{i + 1}</td>
-                                <td className="py-3 px-4 font-bold text-slate-800">{item.Especialidad}</td>
-                                <td className="py-3 px-4 text-center font-black text-red-600">{item.Eliminadas}</td>
-                                <td className="py-3 px-4 text-center font-semibold text-slate-700">{item.TotalCitas}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 h-full overflow-hidden">
+                {/* TABLA ELIMINADAS */}
+                <div className="flex flex-col border border-slate-100 rounded-xl overflow-hidden h-full min-h-0">
+                  <div className="p-3 border-b border-slate-100 flex-none bg-slate-50/50">
+                    <h3 className="font-bold text-xs text-slate-900">Especialidades que más eliminaron</h3>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-xl font-black text-red-600">{data.indicadores.CitasEliminadas}</span>
+                      <span className="text-[10px] text-slate-400">eliminadas en total</span>
                     </div>
                   </div>
-
-                  <div className="bg-white border border-slate-100 rounded-3xl shadow-sm overflow-hidden">
-                    <div className="p-5 border-b border-slate-100">
-                      <h3 className="font-extrabold text-lg text-slate-900">Especialidades con más citas desiertas</h3>
-                      <p className="text-xs text-slate-400 mt-0.5">Citas que nunca fueron atendidas.</p>
-                      <div className="mt-2">
-                        <span className="text-3xl font-black text-amber-600">{data.indicadores.CitasDesiertas}</span>
-                        <span className="text-xs text-slate-400 ml-2">desiertas en total</span>
-                      </div>
-                    </div>
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-left border-collapse text-sm">
-                        <thead>
-                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-400 text-xs font-bold uppercase tracking-wider">
-                            <th className="py-3 px-4">#</th>
-                            <th className="py-3 px-4">Especialidad</th>
-                            <th className="py-3 px-4 text-center">Desiertas</th>
-                            <th className="py-3 px-4 text-center">Total Citas</th>
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(241,245,249,1)]">
+                        <tr className="text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-100">
+                          <th className="py-2 px-3 w-10">#</th>
+                          <th className="py-2 px-3">Especialidad</th>
+                          <th className="py-2 px-3 text-center w-20">Eliminadas</th>
+                          <th className="py-2 px-3 text-center w-20">Total Citas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-slate-700">
+                        {topEliminadasOrdenado.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-slate-400">No hay datos.</td>
                           </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-50 text-slate-700">
-                          {topSinAtenderOrdenado.length === 0 ? (
-                            <tr>
-                              <td colSpan={4} className="py-10 text-center text-slate-400 text-sm">No hay datos.</td>
+                        ) : (
+                          topEliminadasOrdenado.map((item, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-2 px-3 font-bold text-slate-400">{i + 1}</td>
+                              <td className="py-2 px-3 font-semibold text-slate-800">{item.Especialidad}</td>
+                              <td className="py-2 px-3 text-center font-bold text-red-600">{item.Eliminadas}</td>
+                              <td className="py-2 px-3 text-center text-slate-600">{item.TotalCitas}</td>
                             </tr>
-                          ) : (
-                            topSinAtenderOrdenado.map((item, i) => (
-                              <tr key={i} className="hover:bg-slate-50/80 transition-colors">
-                                <td className="py-3 px-4 font-bold text-slate-400">{i + 1}</td>
-                                <td className="py-3 px-4 font-bold text-slate-800">{item.Especialidad}</td>
-                                <td className="py-3 px-4 text-center font-black text-amber-600">{item.SinAtender}</td>
-                                <td className="py-3 px-4 text-center font-semibold text-slate-700">{item.TotalCitas}</td>
-                              </tr>
-                            ))
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              </>
+
+                {/* TABLA DESIERTAS */}
+                <div className="flex flex-col border border-slate-100 rounded-xl overflow-hidden h-full min-h-0">
+                  <div className="p-3 border-b border-slate-100 flex-none bg-slate-50/50">
+                    <h3 className="font-bold text-xs text-slate-900">Especialidades con más citas ausentes</h3>
+                    <div className="flex items-baseline gap-1.5 mt-0.5">
+                      <span className="text-xl font-black text-amber-600">{data.indicadores.CitasDesiertas}</span>
+                      <span className="text-[10px] text-slate-400">ausentes en total</span>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto min-h-0">
+                    <table className="w-full text-left border-collapse text-xs">
+                      <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(241,245,249,1)]">
+                        <tr className="text-slate-400 text-[10px] font-bold uppercase tracking-wider border-b border-slate-100">
+                          <th className="py-2 px-3 w-10">#</th>
+                          <th className="py-2 px-3">Especialidad</th>
+                          <th className="py-2 px-3 text-center w-20">Ausentes</th>
+                          <th className="py-2 px-3 text-center w-20">Total Citas</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50 text-slate-700">
+                        {topSinAtenderOrdenado.length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="py-6 text-center text-slate-400">No hay datos.</td>
+                          </tr>
+                        ) : (
+                          topSinAtenderOrdenado.map((item, i) => (
+                            <tr key={i} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="py-2 px-3 font-bold text-slate-400">{i + 1}</td>
+                              <td className="py-2 px-3 font-semibold text-slate-800">{item.Especialidad}</td>
+                              <td className="py-2 px-3 text-center font-bold text-amber-600">{item.SinAtender}</td>
+                              <td className="py-2 px-3 text-center text-slate-600">{item.TotalCitas}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             )}
-          </>
+          </div>
         ) : null}
       </div>
     </div>
@@ -448,12 +443,12 @@ export default function TiemposPage() {
 
 function KpiCard({ title, value, icon, color, bg }: { title: string; value: number; icon: React.ReactNode; color: string; bg: string }) {
   return (
-    <div className="bg-white border border-slate-100 p-5 rounded-3xl shadow-sm flex items-center justify-between">
-      <div className="space-y-1">
-        <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">{title}</span>
-        <h3 className="text-2xl font-black text-slate-800">{value}</h3>
+    <div className="bg-white border border-slate-100 p-3 rounded-xl shadow-sm flex items-center justify-between">
+      <div className="space-y-0.5">
+        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">{title}</span>
+        <h3 className="text-lg font-black text-slate-800">{value}</h3>
       </div>
-      <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bg} ${color}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${bg} ${color}`}>
         {icon}
       </div>
     </div>

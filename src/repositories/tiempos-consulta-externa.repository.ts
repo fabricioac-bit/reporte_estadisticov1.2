@@ -81,7 +81,7 @@ Evolucion AS (
     GROUP BY YEAR(fecha), MONTH(fecha)
 ),
 TopEliminadas AS (
-    SELECT
+    SELECT TOP 5
         Especialidad,
         SUM(Eliminada) AS Eliminadas,
         COUNT(IdAtencion) AS TotalCitas
@@ -89,9 +89,10 @@ TopEliminadas AS (
     WHERE Especialidad IS NOT NULL
     GROUP BY Especialidad
     HAVING SUM(Eliminada) > 0
+    ORDER BY SUM(Eliminada) DESC
 ),
 TopSinAtender AS (
-    SELECT
+    SELECT TOP 5
         Especialidad,
         SUM(Desierta) AS SinAtender,
         COUNT(IdAtencion) AS TotalCitas
@@ -99,6 +100,7 @@ TopSinAtender AS (
     WHERE Especialidad IS NOT NULL
     GROUP BY Especialidad
     HAVING SUM(Desierta) > 0
+    ORDER BY SUM(Desierta) DESC
 )
 SELECT
     'INDICADORES' AS Tipo,
